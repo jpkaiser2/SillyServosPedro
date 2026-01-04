@@ -9,11 +9,10 @@ public class FlywheelSubsystem {
     private final DcMotorEx flywheel;
     public FlywheelSubsystem(HardwareMap hardwareMap, String flywheelName) {
         this.flywheel = hardwareMap.get(DcMotorEx.class, flywheelName);
-        this.flywheel.setDirection(DcMotorSimple.Direction.REVERSE);
         // Flywheel typically allowed to coast
         this.flywheel.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         this.flywheel.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        this.flywheel.setDirection(DcMotorSimple.Direction.FORWARD);
+        this.flywheel.setDirection(DcMotorSimple.Direction.REVERSE);
     }
 
     public void setPower(double power) {
