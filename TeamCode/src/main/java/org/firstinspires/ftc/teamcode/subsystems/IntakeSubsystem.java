@@ -11,6 +11,10 @@ public class IntakeSubsystem {
     private final DcMotorEx intakeMotor; // Core Hex motor
     private final Servo intakeAngleServo; // rotates intake
 
+    // Holds the last commanded intake angle position (0..1)
+    private double intakeAnglePos = 0.5;
+    private static final double ANGLE_DEADBAND = 0.05; // stick deadband to hold position
+
     private boolean requestStageFlag = false;
     private boolean prevStageButton = false;
 
@@ -21,7 +25,7 @@ public class IntakeSubsystem {
         this.intakeMotor.setDirection(DcMotorSimple.Direction.FORWARD);
 
         this.intakeAngleServo = hardwareMap.get(Servo.class, intakeAngleServoName);
-        this.intakeAngleServo.setPosition(0.5);
+        this.intakeAngleServo.setPosition(intakeAnglePos);
     }
 
     /**
@@ -41,10 +45,18 @@ public class IntakeSubsystem {
         intakeMotor.setPower(power);
     }
 
-    /** Adjust intake rotation servo (e.g., gamepad2.left_stick_x) */
+    /**
+     * Adjust intake rotation servo (e.g., gamepad2.left_stick_x).
+     * When the stick is inside the deadband, the servo holds its last position.
+     */
     public void setRotationInput(double joystick) {
-        double pos = (Math.max(-1.0, Math.min(1.0, joystick)) * 0.5) + 0.5; // -1..1 -> 0..1
-        intakeAngleServo.setPosition(Math.max(0.0, Math.min(1.0, pos)));
+        double j = Math.max(-1.0, Math.min(1.0, joystick));
+        if (Math.abs(j) > ANGLE_DEADBAND) {
+            double pos = (j * 0.5) + 0.5; // -1..1 -> 0..1
+            intakeAnglePos = Math.max(0.0, Math.min(1.0, pos));
+            intakeAngleServo.setPosition(intakeAnglePos);
+        }
+        // else: hold previous intakeAnglePos
     }
 
 
@@ -68,7 +80,7 @@ public class IntakeSubsystem {
 
     public String getStatus() {
         return String.format(
-            "intakePower=%.2f, intakeAngle=%.2f, requestStage=%s",
-            intakeMotor.getPower(), intakeAngleServo.getPosition(), requestStageFlag);
+                "intakePower=%.2f, intakeAngle=%.2f, requestStage=%s",
+                intakeMotor.getPower(), intakeAnglePos, requestStageFlag);
     }
 }
