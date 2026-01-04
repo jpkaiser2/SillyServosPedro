@@ -41,6 +41,10 @@ public class TeleOpPedroTemplate extends OpMode {
     private IntakeSubsystem intake;
     private IndexerSubsystem indexer;
     private FlywheelSubsystem flywheel;
+    // Indexer manual control only
+    private boolean indexerLocked = false;
+    private boolean prevG2X = false;
+    private boolean prevUp = false, prevRight = false, prevDown = false;
 
 
     @Override
@@ -89,14 +93,25 @@ public class TeleOpPedroTemplate extends OpMode {
         // Feed lever pulse (in Indexer) on gamepad2.y
         indexer.handleLeverButton(gamepad2.y);
 
-        // Indexer selection: choose which ball aligns with turret
-        if (gamepad2.dpad_left) {
+        // Indexer presets via D-Pad (ignored when locked)
+        if (gamepad2.dpad_up && !prevUp) {
             indexer.setSelection(IndexerSubsystem.Selection.POSITION_1);
-        } else if (gamepad2.dpad_up) {
+        } else if (gamepad2.dpad_right && !prevRight) {
             indexer.setSelection(IndexerSubsystem.Selection.POSITION_2);
-        } else if (gamepad2.dpad_right) {
+        } else if (gamepad2.dpad_down && !prevDown) {
             indexer.setSelection(IndexerSubsystem.Selection.POSITION_3);
         }
+
+        // Lock toggle on gamepad2.x (edge-detect)
+        boolean xPressed = gamepad2.x;
+        if (xPressed && !prevG2X) {
+            indexerLocked = !indexerLocked;
+            indexer.setLocked(indexerLocked);
+        }
+        prevG2X = xPressed;
+        prevUp = gamepad2.dpad_up;
+        prevRight = gamepad2.dpad_right;
+        prevDown = gamepad2.dpad_down;
         // Maintain lever timing
         indexer.update();
 
@@ -109,6 +124,7 @@ public class TeleOpPedroTemplate extends OpMode {
         telemetry.addData("Turret", turret.getStatus());
         telemetry.addData("Intake", intake.getStatus());
         telemetry.addData("Indexer", indexer.getStatus());
+        telemetry.addData("IndexerLock", indexerLocked ? "LOCKED" : "unlocked");
         telemetry.addData("Flywheel", flywheel.getStatus());
         telemetry.update();
     }

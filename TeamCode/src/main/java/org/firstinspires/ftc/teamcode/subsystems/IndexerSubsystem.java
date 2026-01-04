@@ -7,15 +7,16 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 public class IndexerSubsystem {
     public enum Selection { POSITION_1, POSITION_2, POSITION_3 }
 
-    private final Servo indexerServo;   // aligns selected ball with turret
+    private final Servo indexerServo;   // full-range positional servo controlling indexer
     private final Servo feedLeverServo; // lever that feeds balls into intake
 
-    private Selection selection = Selection.POSITION_1;
+    // Preset positions (user-specified)
+    public static final double POSITION_1 = 1.00; // pos1
+    public static final double POSITION_2 = 0.51; // pos2
+    public static final double POSITION_3 = 0.05; // pos3
 
-    // Predetermined positions (edit constants only if you must)
-    public static final double POSITION_1 = 0.5; 
-    public static final double POSITION_2 = 0.8; 
-    public static final double POSITION_3 = 0.2; 
+    private Selection selection = Selection.POSITION_2; // default to middle
+    private boolean locked = false;     // when true, selection changes disabled
 
     // Lever pulse config
     private final ElapsedTime leverTimer = new ElapsedTime();
@@ -26,19 +27,19 @@ public class IndexerSubsystem {
 
     public IndexerSubsystem(HardwareMap hardwareMap, String indexerServoName, String feedLeverServoName) {
         this.indexerServo = hardwareMap.get(Servo.class, indexerServoName);
-        this.indexerServo.setPosition(POSITION_1);
+        this.indexerServo.setPosition(POSITION_2);
 
         this.feedLeverServo = hardwareMap.get(Servo.class, feedLeverServoName);
         this.feedLeverServo.setPosition(leverIdlePos);
     }
 
-    // No setter for indexer positions; only the three predetermined positions are allowed.
     public void setLeverConfig(long pulseMs, double idle, double engaged) {
         leverPulseMs = pulseMs; leverIdlePos = idle; leverEngagedPos = engaged;
     }
 
-    /** Choose which ball aligns with the turret. */
+    /** Choose which preset aligns with the turret. Ignored if locked. */
     public void setSelection(Selection sel) {
+        if (locked) return;
         this.selection = sel;
         switch (sel) {
             case POSITION_1:
@@ -54,6 +55,10 @@ public class IndexerSubsystem {
     }
 
     public Selection getSelection() { return selection; }
+
+    /** Lock prevents selection changes. */
+    public void setLocked(boolean locked) { this.locked = locked; }
+    public boolean isLocked() { return locked; }
 
     /** Call once per loop to maintain lever pulse timing. */
     public void update() {
@@ -79,6 +84,7 @@ public class IndexerSubsystem {
 
     public String getStatus() {
         double pos = indexerServo.getPosition();
-        return String.format("indexerSel=%s pos=%.2f leverPulsing=%s", selection, pos, leverPulsing);
+        return String.format("indexerSel=%s pos=%.2f locked=%s leverPulsing=%s",
+            selection, pos, locked, leverPulsing);
     }
 }
