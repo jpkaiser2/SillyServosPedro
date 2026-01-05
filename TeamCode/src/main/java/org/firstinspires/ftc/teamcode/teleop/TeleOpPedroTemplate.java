@@ -44,7 +44,6 @@ public class TeleOpPedroTemplate extends OpMode {
     // Indexer preset control
     
     private boolean prevUp = false, prevRight = false, prevDown = false;
-    private boolean prevA = false; // toggle manual mode
 
 
     @Override
@@ -93,21 +92,24 @@ public class TeleOpPedroTemplate extends OpMode {
         // Feed lever pulse (in Indexer) on gamepad2.y
         indexer.handleLeverButton(gamepad2.y);
 
-        // Toggle indexer manual mode on A
-        if (gamepad2.a && !prevA) {
-            indexer.setManualMode(!indexer.isManualMode());
-        }
-        prevA = gamepad2.a;
-
-        // In manual mode, use right_stick_y to free-rotate (adjust position); otherwise presets via D-Pad
-        if (indexer.isManualMode()) {
-            indexer.setManualInput(gamepad2.right_stick_y);
-        } else {
-            if (gamepad2.dpad_up && !prevUp) {
+        // Presets via D-Pad, hold LB for collection presets
+        boolean collectionMod = gamepad2.left_bumper; // modifier for collection positions
+        if (gamepad2.dpad_up && !prevUp) {
+            if (collectionMod) {
+                indexer.setCollectionSelection(IndexerSubsystem.Selection.POSITION_1);
+            } else {
                 indexer.setSelection(IndexerSubsystem.Selection.POSITION_1);
-            } else if (gamepad2.dpad_right && !prevRight) {
+            }
+        } else if (gamepad2.dpad_right && !prevRight) {
+            if (collectionMod) {
+                indexer.setCollectionSelection(IndexerSubsystem.Selection.POSITION_2);
+            } else {
                 indexer.setSelection(IndexerSubsystem.Selection.POSITION_2);
-            } else if (gamepad2.dpad_down && !prevDown) {
+            }
+        } else if (gamepad2.dpad_down && !prevDown) {
+            if (collectionMod) {
+                indexer.setCollectionSelection(IndexerSubsystem.Selection.POSITION_3);
+            } else {
                 indexer.setSelection(IndexerSubsystem.Selection.POSITION_3);
             }
         }
@@ -127,7 +129,6 @@ public class TeleOpPedroTemplate extends OpMode {
         telemetry.addData("Turret", turret.getStatus());
         telemetry.addData("Intake", intake.getStatus());
         telemetry.addData("Indexer", indexer.getStatus());
-        telemetry.addData("IndexerTicks", "%d", indexer.getEncoder());
         telemetry.addData("Flywheel", flywheel.getStatus());
         telemetry.update();
     }

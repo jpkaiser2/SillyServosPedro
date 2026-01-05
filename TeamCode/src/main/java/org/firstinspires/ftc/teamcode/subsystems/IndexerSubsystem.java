@@ -12,15 +12,17 @@ public class IndexerSubsystem {
     private final DcMotorEx indexerMotor;    // motor with encoder controlling indexer
     private final Servo feedLeverServo;      // lever that feeds balls into intake
 
-    // Temporary manual mode for free rotation/tuning (power control)
-    private boolean manualMode = false;
-    private static final double JOYSTICK_DEADBAND = 0.10;  // ignore tiny stick noise
-    private double manualPower = 0.0;       // processed input after deadband
+    // Manual mode removed
 
     // Preset positions in encoder ticks (user-provided; tune as needed)
     public static int POSITION_1 = 0;
     public static int POSITION_2 = 97;
     public static int POSITION_3 = 190;
+
+    // Secondary collection positions in encoder ticks
+    public static int COLLECTION_1 = 332;
+    public static int COLLECTION_2 = 241;
+    public static int COLLECTION_3 = 429;
 
     private Selection selection = Selection.POSITION_2; // default to middle
 
@@ -46,9 +48,8 @@ public class IndexerSubsystem {
         leverPulseMs = pulseMs; leverIdlePos = idle; leverEngagedPos = engaged;
     }
 
-    /** Choose which preset aligns with the turret. Ignored when in manual mode. */
+    /** Choose which preset aligns with the turret. */
     public void setSelection(Selection sel) {
-        if (manualMode) return;
         this.selection = sel;
         int target;
         switch (sel) {
@@ -65,27 +66,26 @@ public class IndexerSubsystem {
         indexerMotor.setPower(0.6); // move power; tune as needed
     }
 
+    /** Choose which collection preset to move to. */
+    public void setCollectionSelection(Selection sel) {
+        int target;
+        switch (sel) {
+            case POSITION_1:
+                target = COLLECTION_1; break;
+            case POSITION_2:
+                target = COLLECTION_2; break;
+            case POSITION_3:
+            default:
+                target = COLLECTION_3; break;
+        }
+        indexerMotor.setTargetPosition(target);
+        indexerMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        indexerMotor.setPower(0.6);
+    }
+
     public Selection getSelection() { return selection; }
 
-    /** Enable/disable temporary manual mode. */
-    public void setManualMode(boolean enabled) {
-        manualMode = enabled;
-        // Reset power when switching modes
-        manualPower = 0.0;
-        // Ensure encoder is active
-        indexerMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        indexerMotor.setPower(0.0);
-    }
-    public boolean isManualMode() { return manualMode; }
-
-    /** While in manual mode, map joystick Y (-1..1) to motor power for free rotation. */
-    public void setManualInput(double joystickY) {
-        if (!manualMode) { manualPower = 0.0; return; }
-        double p = -joystickY; // FTC sticks: up is -y, invert so up moves forward
-        manualPower = (Math.abs(p) < JOYSTICK_DEADBAND) ? 0.0 : p;
-        indexerMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        indexerMotor.setPower(manualPower);
-    }
+    // Manual mode APIs removed
 
     /** Call once per loop to maintain lever pulse timing. */
     public void update() {
@@ -110,15 +110,10 @@ public class IndexerSubsystem {
     }
 
     public String getStatus() {
-        int ticks = indexerMotor.getCurrentPosition();
         boolean busy = indexerMotor.getMode() == DcMotor.RunMode.RUN_TO_POSITION && indexerMotor.isBusy();
-        return String.format("indexerSel=%s ticks=%d mode=%s busy=%s manual=%s leverPulsing=%s",
-            selection, ticks, indexerMotor.getMode(), busy, manualMode, leverPulsing);
+        return String.format("indexerSel=%s mode=%s busy=%s leverPulsing=%s",
+            selection, indexerMotor.getMode(), busy, leverPulsing);
     }
 
-    /** Current encoder ticks (useful for finding presets). */
-    public int getEncoder() { return indexerMotor.getCurrentPosition(); }
-
-    /** Update preset ticks at runtime for tuning. */
-    public void setPresets(int p1, int p2, int p3) { POSITION_1 = p1; POSITION_2 = p2; POSITION_3 = p3; }
+    // Tuning helpers removed
 }
