@@ -32,7 +32,7 @@ public class TeleOpPedroTemplate extends OpMode {
     private static final String INTAKE = "intake";            // core hex motor
     private static final String INTAKE_ANGLE = "intakeAngle"; // servo
     private static final String FEED_LEVER = "feedLever";     // servo
-    private static final String INDEXER = "indexer";          // servo
+    private static final String INDEXER = "indexer";          // motor
     private static final String FLYWHEEL = "flywheel";        // motor
     private static final String IMU = "imu"; // optional
 
@@ -41,10 +41,10 @@ public class TeleOpPedroTemplate extends OpMode {
     private IntakeSubsystem intake;
     private IndexerSubsystem indexer;
     private FlywheelSubsystem flywheel;
-    // Indexer manual control only
-    private boolean indexerLocked = false;
-    private boolean prevG2X = false;
+    // Indexer preset control
+    
     private boolean prevUp = false, prevRight = false, prevDown = false;
+    private boolean prevA = false; // toggle manual mode
 
 
     @Override
@@ -93,22 +93,25 @@ public class TeleOpPedroTemplate extends OpMode {
         // Feed lever pulse (in Indexer) on gamepad2.y
         indexer.handleLeverButton(gamepad2.y);
 
-        // Indexer presets via D-Pad (ignored when locked)
-        if (gamepad2.dpad_up && !prevUp) {
-            indexer.setSelection(IndexerSubsystem.Selection.POSITION_1);
-        } else if (gamepad2.dpad_right && !prevRight) {
-            indexer.setSelection(IndexerSubsystem.Selection.POSITION_2);
-        } else if (gamepad2.dpad_down && !prevDown) {
-            indexer.setSelection(IndexerSubsystem.Selection.POSITION_3);
+        // Toggle indexer manual mode on A
+        if (gamepad2.a && !prevA) {
+            indexer.setManualMode(!indexer.isManualMode());
+        }
+        prevA = gamepad2.a;
+
+        // In manual mode, use right_stick_y to free-rotate (adjust position); otherwise presets via D-Pad
+        if (indexer.isManualMode()) {
+            indexer.setManualInput(gamepad2.right_stick_y);
+        } else {
+            if (gamepad2.dpad_up && !prevUp) {
+                indexer.setSelection(IndexerSubsystem.Selection.POSITION_1);
+            } else if (gamepad2.dpad_right && !prevRight) {
+                indexer.setSelection(IndexerSubsystem.Selection.POSITION_2);
+            } else if (gamepad2.dpad_down && !prevDown) {
+                indexer.setSelection(IndexerSubsystem.Selection.POSITION_3);
+            }
         }
 
-        // Lock toggle on gamepad2.x (edge-detect)
-        boolean xPressed = gamepad2.x;
-        if (xPressed && !prevG2X) {
-            indexerLocked = !indexerLocked;
-            indexer.setLocked(indexerLocked);
-        }
-        prevG2X = xPressed;
         prevUp = gamepad2.dpad_up;
         prevRight = gamepad2.dpad_right;
         prevDown = gamepad2.dpad_down;
@@ -124,7 +127,7 @@ public class TeleOpPedroTemplate extends OpMode {
         telemetry.addData("Turret", turret.getStatus());
         telemetry.addData("Intake", intake.getStatus());
         telemetry.addData("Indexer", indexer.getStatus());
-        telemetry.addData("IndexerLock", indexerLocked ? "LOCKED" : "unlocked");
+        telemetry.addData("IndexerTicks", "%d", indexer.getEncoder());
         telemetry.addData("Flywheel", flywheel.getStatus());
         telemetry.update();
     }
