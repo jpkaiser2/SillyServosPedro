@@ -14,7 +14,10 @@ public class IntakeSubsystem {
     // Holds the last commanded intake angle position (0..1)
     private double intakeAnglePos = 0.5;
     private static final double ANGLE_DEADBAND = 0.05; // stick deadband to hold position
+    private static final double INTAKE_UP_POS = 1.0; // up position to avoid interference
 
+    // When true, intakeAngleServo is forced to the up position and held
+    private boolean holdUp = false;
     private boolean requestStageFlag = false;
     private boolean prevStageButton = false;
 
@@ -50,6 +53,12 @@ public class IntakeSubsystem {
      * When the stick is inside the deadband, the servo holds its last position.
      */
     public void setRotationInput(double joystick) {
+        if (holdUp) {
+            // While held up, keep servo at the up position
+            intakeAnglePos = INTAKE_UP_POS;
+            intakeAngleServo.setPosition(intakeAnglePos);
+            return;
+        }
         double j = Math.max(-1.0, Math.min(1.0, joystick));
         if (Math.abs(j) > ANGLE_DEADBAND) {
             double pos = (j * 0.5) + 0.5; // -1..1 -> 0..1
@@ -83,4 +92,16 @@ public class IntakeSubsystem {
                 "intakePower=%.2f, intakeAngle=%.2f, requestStage=%s",
                 intakeMotor.getPower(), intakeAnglePos, requestStageFlag);
     }
+
+    /** Enable or disable holding the intake angle in the up position. */
+    public void setHoldUp(boolean enable) {
+        holdUp = enable;
+        if (holdUp) {
+            intakeAnglePos = INTAKE_UP_POS;
+            intakeAngleServo.setPosition(intakeAnglePos);
+        }
+    }
+
+    /** Whether the intake angle is currently being held up. */
+    public boolean isHoldUp() { return holdUp; }
 }

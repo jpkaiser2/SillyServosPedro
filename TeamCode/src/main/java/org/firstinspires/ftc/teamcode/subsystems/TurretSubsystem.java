@@ -18,8 +18,9 @@ public class TurretSubsystem {
 
     private double rotationPowerCmd = 0.0;
     private double maxPower = 0.6;
-
-    private double angleInput = 0.5;
+    // Holds the last commanded turret angle servo position (0..1)
+    private double angleServoPos = 0.5;
+    private static final double ANGLE_DEADBAND = 0.05; // stick deadband to hold position
 
     // "Soft zero" offset so angle=0 when turret faces forward
     private int zeroTicks = 0;
@@ -35,7 +36,7 @@ public class TurretSubsystem {
         this.turretMotor.setDirection(DcMotorSimple.Direction.FORWARD);
 
         this.turretAngleServo = hardwareMap.get(Servo.class, turretAngleServoName);
-        this.turretAngleServo.setPosition(0.5);
+        this.turretAngleServo.setPosition(angleServoPos);
 
         // Soft-zero at init: turret angle will be 0 at whatever position you are in during init.
         zeroTurretHere();
@@ -74,10 +75,14 @@ public class TurretSubsystem {
         rotationPowerCmd = clip(joystick, -maxPower, maxPower);
     }
 
-    /** Adjust hood/angle servo by joystick -1..1 mapped to 0..1 */
+    /** Adjust hood/angle servo by joystick -1..1 mapped to 0..1. Holds position in deadband. */
     public void setAngleInput(double joystick) {
-        double pos = (clip(joystick, -1.0, 1.0) * -0.5) + 0.5; // up is -y
-        angleInput = clip(pos, 0.0, 1.0);
+        double j = clip(joystick, -1.0, 1.0);
+        if (Math.abs(j) > ANGLE_DEADBAND) {
+            double pos = (j * -0.5) + 0.5; // up is -y
+            angleServoPos = clip(pos, 0.0, 1.0);
+        }
+        // else: hold previous angleServoPos
     }
 
     // ---- State access (what PID needs) ----
@@ -107,7 +112,8 @@ public class TurretSubsystem {
         }
 
         turretMotor.setPower(p);
-        turretAngleServo.setPosition(angleInput);
+        // Maintain the last commanded angle servo position
+        turretAngleServo.setPosition(angleServoPos);
     }
 
     public String getStatus() {

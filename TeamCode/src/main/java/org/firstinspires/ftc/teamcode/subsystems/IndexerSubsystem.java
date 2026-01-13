@@ -115,5 +115,10 @@ public class IndexerSubsystem {
             selection, indexerMotor.getMode(), busy, leverPulsing);
     }
 
+    /** Whether the indexer is currently moving toward a target position. */
+    public boolean isMoving() {
+        return indexerMotor.getMode() == DcMotor.RunMode.RUN_TO_POSITION && indexerMotor.isBusy();
+    }
+
     // Tuning helpers removed
 }
