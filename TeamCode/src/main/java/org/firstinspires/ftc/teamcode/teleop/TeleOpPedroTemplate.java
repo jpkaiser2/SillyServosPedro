@@ -12,7 +12,7 @@ import org.firstinspires.ftc.teamcode.subsystems.IndexerSubsystem;
 import org.firstinspires.ftc.teamcode.subsystems.FlywheelSubsystem;
 import org.firstinspires.ftc.teamcode.subsystems.TurretSubsystem;
 import org.firstinspires.ftc.teamcode.subsystems.drive.DriveBase;
-import org.firstinspires.ftc.teamcode.subsystems.drive.RawMecanumDrive;
+import org.firstinspires.ftc.teamcode.subsystems.drive.PedroDrive;
 
 /**
  * TeleOpPedroTemplate
@@ -62,7 +62,8 @@ public class TeleOpPedroTemplate extends OpMode {
     @Override
     public void init() {
         HardwareMap hw = hardwareMap;
-        drive = new RawMecanumDrive(hw, FRONT_LEFT, FRONT_RIGHT, BACK_LEFT, BACK_RIGHT, IMU);
+        // Use Pedro Pathing Follower for teleop drive
+        drive = new PedroDrive(hw);
         turret = new TurretSubsystem(hw, TURRET, TURRET_ANGLE);
         intake = new IntakeSubsystem(hw, INTAKE, INTAKE_ANGLE);
         indexer = new IndexerSubsystem(hw, INDEXER, FEED_LEVER);
@@ -91,8 +92,9 @@ public class TeleOpPedroTemplate extends OpMode {
             rx *= slowFactor;
         }
 
-        // Always robot-centric
-        drive.setDriverInput(x, y, rx, false);
+        // Hold RB to use robot-centric, else field-centric
+        boolean robotCentricHeld = gamepad1.right_bumper;
+        drive.setDriverInput(x, y, rx, !robotCentricHeld);
         drive.update();
 
         // Mechanisms
@@ -199,6 +201,7 @@ public class TeleOpPedroTemplate extends OpMode {
 
         // Telemetry
         telemetry.addData("slowModeHeld", slowModeHeld);
+        telemetry.addData("robotCentricHeld", robotCentricHeld);
         telemetry.addData("Drive", "x=%.2f y=%.2f rx=%.2f", x, y, rx);
         telemetry.addData("Turret", turret.getStatus());
         telemetry.addData("Intake", intake.getStatus());
