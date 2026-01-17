@@ -3,9 +3,12 @@ package org.firstinspires.ftc.teamcode.teleop;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.bylazar.configurables.PanelsConfigurables;
+/*
 import com.qualcomm.robotcore.hardware.NormalizedColorSensor;
 import com.qualcomm.robotcore.hardware.NormalizedRGBA;
 import android.graphics.Color;
+*/
 
 import org.firstinspires.ftc.teamcode.subsystems.IntakeSubsystem;
 import org.firstinspires.ftc.teamcode.subsystems.IndexerSubsystem;
@@ -22,7 +25,7 @@ import org.firstinspires.ftc.teamcode.subsystems.drive.PedroDrive;
  * - In init(), replace `drive = new RawMecanumDrive(...)` with `drive = new PedroDrive(...)`.
  * - Keep calls to drive.setDriverInput(...) and drive.update() the same.
  */
-@TeleOp(name = "Pedro Template", group = "TeleOp")
+@TeleOp(name = "TeleOpMainPedro", group = "TeleOp")
 public class TeleOpPedroTemplate extends OpMode {
 
     // HardwareMap names (edit these to match your configuration)
@@ -38,7 +41,7 @@ public class TeleOpPedroTemplate extends OpMode {
     private static final String INDEXER = "indexer";          // motor
     private static final String FLYWHEEL = "flywheel";        // motor
     private static final String IMU = "imu"; // optional
-    private static final String COLOR_SENSOR = "sensor_color"; // color sensor at shooting position
+    // private static final String COLOR_SENSOR = "sensor_color"; // color sensor at shooting position
 
     private DriveBase drive;
     private TurretSubsystem turret;
@@ -50,13 +53,15 @@ public class TeleOpPedroTemplate extends OpMode {
     private boolean prevUp = false, prevRight = false, prevDown = false;
     private boolean prevX = false, prevB = false, prevIndex = false;
 
-    // Software indexing state
+    // Software indexing state (disabled: color sensor-based indexing)
+    /*
     private enum BallColor { BLUE, PURPLE, UNKNOWN }
     private BallColor[] slots = new BallColor[] { BallColor.UNKNOWN, BallColor.UNKNOWN, BallColor.UNKNOWN };
     private int head = 0; // slot at shooting/color sensor position
     private int pendingSteps = 0; // queued forward steps
     private boolean wasMovingLastUpdate = false;
     private NormalizedColorSensor colorSensor;
+    */
 
 
     @Override
@@ -68,9 +73,12 @@ public class TeleOpPedroTemplate extends OpMode {
         intake = new IntakeSubsystem(hw, INTAKE, INTAKE_ANGLE);
         indexer = new IndexerSubsystem(hw, INDEXER, FEED_LEVER);
         flywheel = new FlywheelSubsystem(hw, FLYWHEEL);
-        try {
-            colorSensor = hw.get(NormalizedColorSensor.class, COLOR_SENSOR);
-        } catch (Exception ignore) { colorSensor = null; }
+        // Enable dashboard configurables for indexer presets
+        try { PanelsConfigurables.INSTANCE.refreshClass(indexer); } catch (Exception ignore) {}
+        // Color sensor disabled
+        // try {
+        //     colorSensor = hw.get(NormalizedColorSensor.class, COLOR_SENSOR);
+        // } catch (Exception ignore) { colorSensor = null; }
     }
 
     @Override
@@ -110,31 +118,31 @@ public class TeleOpPedroTemplate extends OpMode {
         // Feed lever pulse (in Indexer) on gamepad2.y
         indexer.handleLeverButton(gamepad2.y);
 
-        // Indexing: advance one pocket and record color (gamepad1.a)
-        if (gamepad1.a && !prevIndex) {
-            intake.setHoldUp(true);
-            pendingSteps += 1;
-        }
-        prevIndex = gamepad1.a;
+        // Indexing disabled: manual presets only
+        // if (gamepad1.a && !prevIndex) {
+        //     intake.setHoldUp(true);
+        //     pendingSteps += 1;
+        // }
+        // prevIndex = gamepad1.a;
 
-        // Color selection: gamepad1.x -> BLUE, gamepad1.b -> PURPLE
-        if (gamepad1.x && !prevX) {
-            intake.setHoldUp(true);
-            int targetIndex = findColorIndex(BallColor.BLUE);
-            if (targetIndex >= 0) {
-                int deltaForward = (targetIndex - head + 3) % 3;
-                pendingSteps += deltaForward;
-            }
-        } else if (gamepad1.b && !prevB) {
-            intake.setHoldUp(true);
-            int targetIndex = findColorIndex(BallColor.PURPLE);
-            if (targetIndex >= 0) {
-                int deltaForward = (targetIndex - head + 3) % 3;
-                pendingSteps += deltaForward;
-            }
-        }
-        prevX = gamepad1.x;
-        prevB = gamepad1.b;
+        // Color selection disabled
+        // if (gamepad1.x && !prevX) {
+        //     intake.setHoldUp(true);
+        //     int targetIndex = findColorIndex(BallColor.BLUE);
+        //     if (targetIndex >= 0) {
+        //         int deltaForward = (targetIndex - head + 3) % 3;
+        //         pendingSteps += deltaForward;
+        //     }
+        // } else if (gamepad1.b && !prevB) {
+        //     intake.setHoldUp(true);
+        //     int targetIndex = findColorIndex(BallColor.PURPLE);
+        //     if (targetIndex >= 0) {
+        //         int deltaForward = (targetIndex - head + 3) % 3;
+        //         pendingSteps += deltaForward;
+        //     }
+        // }
+        // prevX = gamepad1.x;
+        // prevB = gamepad1.b;
 
         // Presets via D-Pad, hold LB for collection presets
         boolean collectionMod = gamepad2.left_bumper; // modifier for collection positions
@@ -165,31 +173,31 @@ public class TeleOpPedroTemplate extends OpMode {
         prevUp = gamepad2.dpad_up;
         prevRight = gamepad2.dpad_right;
         prevDown = gamepad2.dpad_down;
-        // Maintain lever timing and execute queued indexer steps one at a time
+        // Maintain lever timing only; indexing queue disabled
         indexer.update();
-        boolean moving = indexer.isMoving();
-        if (wasMovingLastUpdate && !moving) {
-            // Just arrived: sample color at head
-            sampleAndStoreColorAtHead();
-        }
-        wasMovingLastUpdate = moving;
-        if (!moving && pendingSteps > 0) {
-            // Execute a single forward step through POSITION_1 -> POSITION_2 -> POSITION_3 -> POSITION_1
-            IndexerSubsystem.Selection sel = indexer.getSelection();
-            IndexerSubsystem.Selection nextSel;
-            switch (sel) {
-                case POSITION_1:
-                    nextSel = IndexerSubsystem.Selection.POSITION_2; break;
-                case POSITION_2:
-                    nextSel = IndexerSubsystem.Selection.POSITION_3; break;
-                case POSITION_3:
-                default:
-                    nextSel = IndexerSubsystem.Selection.POSITION_1; break;
-            }
-            indexer.setSelection(nextSel);
-            head = (head + 1) % 3;
-            pendingSteps--;
-        }
+        // boolean moving = indexer.isMoving();
+        // if (wasMovingLastUpdate && !moving) {
+        //     // Just arrived: sample color at head
+        //     sampleAndStoreColorAtHead();
+        // }
+        // wasMovingLastUpdate = moving;
+        // if (!moving && pendingSteps > 0) {
+        //     // Execute a single forward step through POSITION_1 -> POSITION_2 -> POSITION_3 -> POSITION_1
+        //     IndexerSubsystem.Selection sel = indexer.getSelection();
+        //     IndexerSubsystem.Selection nextSel;
+        //     switch (sel) {
+        //         case POSITION_1:
+        //             nextSel = IndexerSubsystem.Selection.POSITION_2; break;
+        //         case POSITION_2:
+        //             nextSel = IndexerSubsystem.Selection.POSITION_3; break;
+        //         case POSITION_3:
+        //         default:
+        //             nextSel = IndexerSubsystem.Selection.POSITION_1; break;
+        //     }
+        //     indexer.setSelection(nextSel);
+        //     head = (head + 1) % 3;
+        //     pendingSteps--;
+        // }
 
         // Release intake hold once indexer finishes moving
         if (!indexer.isMoving() && intake.isHoldUp()) {
@@ -206,33 +214,44 @@ public class TeleOpPedroTemplate extends OpMode {
         telemetry.addData("Turret", turret.getStatus());
         telemetry.addData("Intake", intake.getStatus());
         telemetry.addData("Indexer", indexer.getStatus());
-        telemetry.addData("Buffer", String.format("head=%d slots=[%s,%s,%s]", head, slots[0], slots[1], slots[2]));
+        telemetry.addData("Indexer Presets", String.format("P1=%d P2=%d P3=%d",
+            IndexerSubsystem.POSITION_1,
+            IndexerSubsystem.POSITION_2,
+            IndexerSubsystem.POSITION_3));
+        telemetry.addData("Collection Presets", String.format("C1=%d C2=%d C3=%d",
+            IndexerSubsystem.COLLECTION_1,
+            IndexerSubsystem.COLLECTION_2,
+            IndexerSubsystem.COLLECTION_3));
+        telemetry.addData("Indexer Enc", String.format("cur=%d tgt=%d",
+            indexer.getCurrentPosition(),
+            indexer.getTargetPosition()));
+        // telemetry.addData("Buffer", String.format("head=%d slots=[%s,%s,%s]", head, slots[0], slots[1], slots[2]));
         telemetry.addData("Flywheel", flywheel.getStatus());
         telemetry.update();
     }
-    private int findColorIndex(BallColor desired) {
-        for (int i = 0; i < 3; i++) {
-            if (slots[i] == desired) return i;
-        }
-        return -1;
-    }
+    // private int findColorIndex(BallColor desired) {
+    //     for (int i = 0; i < 3; i++) {
+    //         if (slots[i] == desired) return i;
+    //     }
+    //     return -1;
+    // }
 
-    private void sampleAndStoreColorAtHead() {
-        if (colorSensor == null) return;
-        try {
-            NormalizedRGBA colors = colorSensor.getNormalizedColors();
-            final float[] hsv = new float[3];
-            Color.colorToHSV(colors.toColor(), hsv);
-            float hue = hsv[0];
-            BallColor detected;
-            if (hue >= 200 && hue < 260) {
-                detected = BallColor.BLUE;
-            } else if (hue >= 260 && hue < 340) {
-                detected = BallColor.PURPLE;
-            } else {
-                detected = BallColor.UNKNOWN;
-            }
-            slots[head] = detected;
-        } catch (Exception ignore) { /* leave UNKNOWN */ }
-    }
+    // private void sampleAndStoreColorAtHead() {
+    //     if (colorSensor == null) return;
+    //     try {
+    //         NormalizedRGBA colors = colorSensor.getNormalizedColors();
+    //         final float[] hsv = new float[3];
+    //         Color.colorToHSV(colors.toColor(), hsv);
+    //         float hue = hsv[0];
+    //         BallColor detected;
+    //         if (hue >= 200 && hue < 260) {
+    //             detected = BallColor.BLUE;
+    //         } else if (hue >= 260 && hue < 340) {
+    //             detected = BallColor.PURPLE;
+    //         } else {
+    //             detected = BallColor.UNKNOWN;
+    //         }
+    //         slots[head] = detected;
+    //     } catch (Exception ignore) { /* leave UNKNOWN */ }
+    // }
 }

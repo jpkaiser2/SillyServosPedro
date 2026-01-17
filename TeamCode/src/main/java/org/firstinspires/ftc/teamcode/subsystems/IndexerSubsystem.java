@@ -1,37 +1,51 @@
 package org.firstinspires.ftc.teamcode.subsystems;
 
+import com.bylazar.configurables.annotations.Configurable;
+import com.bylazar.configurables.annotations.IgnoreConfigurable;
+
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
+@Configurable
 public class IndexerSubsystem {
     public enum Selection { POSITION_1, POSITION_2, POSITION_3 }
 
+    @IgnoreConfigurable
     private final DcMotorEx indexerMotor;    // motor with encoder controlling indexer
+    @IgnoreConfigurable
     private final Servo feedLeverServo;      // lever that feeds balls into intake
 
     // Manual mode removed
 
     // Preset positions in encoder ticks (user-provided; tune as needed)
-    public static int POSITION_1 = 0;
-    public static int POSITION_2 = 97;
-    public static int POSITION_3 = 190;
+    public static int POSITION_1 = -3;
+    public static int POSITION_2 = 94;
+    public static int POSITION_3 = 192;
 
     // Secondary collection positions in encoder ticks
     public static int COLLECTION_1 = 332;
     public static int COLLECTION_2 = 241;
     public static int COLLECTION_3 = 429;
 
+    @IgnoreConfigurable
     private Selection selection = Selection.POSITION_2; // default to middle
 
     // Lever pulse config
+    @IgnoreConfigurable
     private final ElapsedTime leverTimer = new ElapsedTime();
+    @IgnoreConfigurable
     private boolean leverPulsing = false;
+    @IgnoreConfigurable
     private long leverPulseMs = 200;
+    @IgnoreConfigurable
     private double leverIdlePos = 0.2;
+    @IgnoreConfigurable
     private double leverEngagedPos = 0.8;
+    @IgnoreConfigurable
+    private double leverMaxPos = 0.55; // cap the physical max position
 
     public IndexerSubsystem(HardwareMap hardwareMap, String indexerMotorName, String feedLeverServoName) {
         this.indexerMotor = hardwareMap.get(DcMotorEx.class, indexerMotorName);
@@ -41,11 +55,24 @@ public class IndexerSubsystem {
         this.indexerMotor.setPower(0.0);
 
         this.feedLeverServo = hardwareMap.get(Servo.class, feedLeverServoName);
-        this.feedLeverServo.setPosition(leverIdlePos);
+        this.feedLeverServo.setDirection(Servo.Direction.REVERSE);
+        this.feedLeverServo.setPosition(Math.min(leverIdlePos, leverMaxPos));
     }
 
     public void setLeverConfig(long pulseMs, double idle, double engaged) {
-        leverPulseMs = pulseMs; leverIdlePos = idle; leverEngagedPos = engaged;
+        leverPulseMs = pulseMs;
+        leverIdlePos = Math.min(idle, leverMaxPos);
+        leverEngagedPos = Math.min(engaged, leverMaxPos);
+    }
+
+    /** Set a hard maximum position for the feed lever servo (0..1). */
+    public void setLeverMax(double max) {
+        leverMaxPos = Math.max(0.0, Math.min(1.0, max));
+        leverIdlePos = Math.min(leverIdlePos, leverMaxPos);
+        leverEngagedPos = Math.min(leverEngagedPos, leverMaxPos);
+        if (!leverPulsing) {
+            feedLeverServo.setPosition(leverIdlePos);
+        }
     }
 
     /** Choose which preset aligns with the turret. */
@@ -97,14 +124,14 @@ public class IndexerSubsystem {
         if (pressed && !leverPulsing) {
             leverPulsing = true;
             leverTimer.reset();
-            feedLeverServo.setPosition(leverEngagedPos);
+            feedLeverServo.setPosition(Math.min(leverEngagedPos, leverMaxPos));
         }
     }
 
     /** Non-blocking lever update, return to idle after pulse. */
     public void updateLever() {
         if (leverPulsing && leverTimer.milliseconds() >= leverPulseMs) {
-            feedLeverServo.setPosition(leverIdlePos);
+            feedLeverServo.setPosition(Math.min(leverIdlePos, leverMaxPos));
             leverPulsing = false;
         }
     }
@@ -118,6 +145,16 @@ public class IndexerSubsystem {
     /** Whether the indexer is currently moving toward a target position. */
     public boolean isMoving() {
         return indexerMotor.getMode() == DcMotor.RunMode.RUN_TO_POSITION && indexerMotor.isBusy();
+    }
+
+    /** Current encoder position of the indexer motor. */
+    public int getCurrentPosition() {
+        return indexerMotor.getCurrentPosition();
+    }
+
+    /** Target encoder position when running to position. */
+    public int getTargetPosition() {
+        return indexerMotor.getTargetPosition();
     }
 
     // Tuning helpers removed
