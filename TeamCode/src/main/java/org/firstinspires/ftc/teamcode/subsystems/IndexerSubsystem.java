@@ -21,14 +21,14 @@ public class IndexerSubsystem {
     // Manual mode removed
 
     // Preset positions in encoder ticks (user-provided; tune as needed)
-    public static int POSITION_1 = -3;
-    public static int POSITION_2 = 94;
-    public static int POSITION_3 = 192;
+    public static int POSITION_1 = 0;
+    public static int POSITION_2 = 192;
+    public static int POSITION_3 = 94;
 
     // Secondary collection positions in encoder ticks
-    public static int COLLECTION_1 = 332;
-    public static int COLLECTION_2 = 241;
-    public static int COLLECTION_3 = 429;
+    public static int COLLECTION_1 = 429;
+    public static int COLLECTION_2 = 332;
+    public static int COLLECTION_3 = 241;
 
     @IgnoreConfigurable
     private Selection selection = Selection.POSITION_2; // default to middle
@@ -45,7 +45,7 @@ public class IndexerSubsystem {
     @IgnoreConfigurable
     private double leverEngagedPos = 0.8;
     @IgnoreConfigurable
-    private double leverMaxPos = 0.55; // cap the physical max position
+    private double leverMaxPos = 0.6; // cap the physical max position
 
     public IndexerSubsystem(HardwareMap hardwareMap, String indexerMotorName, String feedLeverServoName) {
         this.indexerMotor = hardwareMap.get(DcMotorEx.class, indexerMotorName);
@@ -155,6 +155,21 @@ public class IndexerSubsystem {
     /** Target encoder position when running to position. */
     public int getTargetPosition() {
         return indexerMotor.getTargetPosition();
+    }
+
+    /** Nudge the indexer target by a number of encoder ticks. */
+    public void nudgeTicks(int deltaTicks) {
+        int base;
+        if (indexerMotor.getMode() == DcMotor.RunMode.RUN_TO_POSITION) {
+            base = indexerMotor.getTargetPosition();
+        } else {
+            base = indexerMotor.getCurrentPosition();
+        }
+        int target = base + deltaTicks;
+        indexerMotor.setTargetPosition(target);
+        try { indexerMotor.setTargetPositionTolerance(1); } catch (Exception ignore) {}
+        indexerMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        indexerMotor.setPower(0.3);
     }
 
     // Tuning helpers removed

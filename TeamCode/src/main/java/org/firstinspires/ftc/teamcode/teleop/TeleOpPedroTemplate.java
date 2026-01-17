@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.bylazar.configurables.PanelsConfigurables;
+import com.qualcomm.robotcore.util.ElapsedTime;
 /*
 import com.qualcomm.robotcore.hardware.NormalizedColorSensor;
 import com.qualcomm.robotcore.hardware.NormalizedRGBA;
@@ -51,7 +52,22 @@ public class TeleOpPedroTemplate extends OpMode {
     // Indexer preset control
     
     private boolean prevUp = false, prevRight = false, prevDown = false;
-    private boolean prevX = false, prevB = false, prevIndex = false;
+    private boolean prevX = false, prevA = false, prevB = false, prevIndex = false;
+
+    // Collection action state
+    private boolean collectionInProgress = false;
+    private boolean waitingIndexer = false;
+    private final ElapsedTime collectionTimer = new ElapsedTime();
+    private final ElapsedTime servoTimer = new ElapsedTime();
+    private final ElapsedTime indexerWaitTimer = new ElapsedTime();
+    private boolean driveActive = false;
+    private boolean intakeActive = false;
+    private boolean servoPulseActive = false;
+    private long driveDurationMs = 700; // approx for ~5 inches; tune as needed
+    private long servoPulseMs = 250;    // slight dip duration
+    private double drivePower = 0.4;    // forward power during collection motion
+    private double intakeDipPos = 0.5;  // intake angle halfway down then up
+    private long indexerWaitMs = 4000;  // wait for indexer for 4 seconds before next steps
 
     // Software indexing state (disabled: color sensor-based indexing)
     /*
@@ -102,6 +118,15 @@ public class TeleOpPedroTemplate extends OpMode {
 
         // Hold RB to use robot-centric, else field-centric
         boolean robotCentricHeld = gamepad1.right_bumper;
+
+        // Override driver input during collection drive segment
+        if (driveActive) {
+            x = 0.0;
+            y = drivePower;
+            rx = 0.0;
+            robotCentricHeld = true; // force robot-centric while auto driving forward
+        }
+
         drive.setDriverInput(x, y, rx, !robotCentricHeld);
         drive.update();
 
@@ -112,18 +137,25 @@ public class TeleOpPedroTemplate extends OpMode {
         turret.update();
 
         // Intake: motor with triggers, rotation servo with left_stick_x
-        intake.setTriggers(gamepad2.right_trigger, gamepad2.left_trigger);
+        if (intakeActive) {
+            intake.setTriggers(0.0, 1.0); // run intake in reverse during collection
+        } else {
+            intake.setTriggers(gamepad2.right_trigger, gamepad2.left_trigger);
+        }
         intake.setRotationInput(gamepad2.left_stick_x);
 
         // Feed lever pulse (in Indexer) on gamepad2.y
         indexer.handleLeverButton(gamepad2.y);
 
-        // Indexing disabled: manual presets only
-        // if (gamepad1.a && !prevIndex) {
-        //     intake.setHoldUp(true);
-        //     pendingSteps += 1;
-        // }
-        // prevIndex = gamepad1.a;
+        // Manual tick nudging on gamepad1: X forward (+2), A back (-2)
+        if (gamepad2.x && !prevX) {
+            indexer.nudgeTicks(+2);
+        }
+        prevX = gamepad2.x;
+        if (gamepad2.a && !prevA) {
+            indexer.nudgeTicks(-2);
+        }
+        prevA = gamepad2.a;
 
         // Color selection disabled
         // if (gamepad1.x && !prevX) {
@@ -173,6 +205,24 @@ public class TeleOpPedroTemplate extends OpMode {
         prevUp = gamepad2.dpad_up;
         prevRight = gamepad2.dpad_right;
         prevDown = gamepad2.dpad_down;
+        // Collection action trigger: B + corresponding D-pad (up/right/down)
+        if (!collectionInProgress && gamepad2.b && !prevB) {
+            IndexerSubsystem.Selection sel = null;
+            if (gamepad2.dpad_up) sel = IndexerSubsystem.Selection.POSITION_1;
+            else if (gamepad2.dpad_right) sel = IndexerSubsystem.Selection.POSITION_2;
+            else if (gamepad2.dpad_down) sel = IndexerSubsystem.Selection.POSITION_3;
+
+            if (sel != null) {
+                // Step 1: move indexer to collection position first
+                intake.setHoldUp(true);
+                indexer.setCollectionSelection(sel);
+                collectionInProgress = true;
+                waitingIndexer = true;
+                indexerWaitTimer.reset();
+            }
+        }
+        prevB = gamepad2.b;
+
         // Maintain lever timing only; indexing queue disabled
         indexer.update();
         // boolean moving = indexer.isMoving();
@@ -199,9 +249,44 @@ public class TeleOpPedroTemplate extends OpMode {
         //     pendingSteps--;
         // }
 
-        // Release intake hold once indexer finishes moving
-        if (!indexer.isMoving() && intake.isHoldUp()) {
-            intake.setHoldUp(false);
+        // Collection action progression
+        if (collectionInProgress) {
+            if (waitingIndexer) {
+                // Wait 4 seconds AND for indexer to finish before starting next phase
+                if (indexerWaitTimer.milliseconds() >= indexerWaitMs && !indexer.isMoving()) {
+                    waitingIndexer = false;
+                    // Phase 1: dip intake halfway down
+                    servoPulseActive = true;
+                    servoTimer.reset();
+                    intake.setHoldUp(false); // allow angle movement
+                    double jHalf = (intakeDipPos * 2.0) - 1.0; // 0..1 -> -1..1
+                    intake.setRotationInput(jHalf);
+                }
+            } else {
+                // Phase 1 duration: hold halfway down for servoPulseMs
+                if (servoPulseActive && servoTimer.milliseconds() >= servoPulseMs) {
+                    servoPulseActive = false;
+                    // Phase 2: start drive forward + intake reverse simultaneously
+                    collectionTimer.reset();
+                    driveActive = true;
+                    intakeActive = true;
+                }
+                // Phase 2 duration: drive forward while intake reverse
+                if (driveActive && collectionTimer.milliseconds() >= driveDurationMs) {
+                    driveActive = false;
+                    // Stop intake and return servo to up
+                    intakeActive = false;
+                    intake.setTriggers(0.0, 0.0);
+                    intake.setHoldUp(true);
+                    // End collection
+                    collectionInProgress = false;
+                }
+            }
+        } else {
+            // Normal auto-release of intake hold when indexer finishes
+            if (!indexer.isMoving() && intake.isHoldUp()) {
+                intake.setHoldUp(false);
+            }
         }
 
         // Flywheel: run while gamepad2.right_bumper held
@@ -225,6 +310,8 @@ public class TeleOpPedroTemplate extends OpMode {
         telemetry.addData("Indexer Enc", String.format("cur=%d tgt=%d",
             indexer.getCurrentPosition(),
             indexer.getTargetPosition()));
+        telemetry.addData("Collect", String.format("inProg=%s waitIdx=%s drive=%s intake=%s servoPulse=%s",
+            collectionInProgress, waitingIndexer, driveActive, intakeActive, servoPulseActive));
         // telemetry.addData("Buffer", String.format("head=%d slots=[%s,%s,%s]", head, slots[0], slots[1], slots[2]));
         telemetry.addData("Flywheel", flywheel.getStatus());
         telemetry.update();
